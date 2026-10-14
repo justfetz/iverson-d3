@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Allen Iverson career dashboard: every one of his 985 NBA games as a basketball sized by points, plus comparisons with other greats, built with d3.js.">
+<style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>The Answer, Every Game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: a trading card up top, then one wide "every game" ball map, then small-multiple comparison bars and season trends.
+   Dark-first: the 1997–2009 Sixers black/red/gold jersey era, with the basketball's own orange as the mark color. */
+:root{
+  --bg:#0B0A0C;            /* Sixers-era black (#040204), lifted slightly for screens */
+  --surface:#151316;
+  --surface-2:#1E1B20;
+  --fg:#F3EFE8;
+  --fg-2:#CFC8BE;
+  --muted:#8E877D;
+  --line:#2B272D;
+  --line-2:#3A353D;
+  --red:#D50032;           /* Sixers 1997–2009 red */
+  --red-ink:#FF4D6D;       /* red lifted for text on black */
+  --gold:#BB9754;          /* Sixers 1997–2009 gold */
+  --gold-ink:#D8B46B;
+  --ball:#E8772E;          /* basketball orange */
+  --ball-seam:#3B1A08;
+  --ball-hollow:#1A1512;
+  --comp-bar:#4C4650;      /* neutral bars for comparison players */
+  --phi:#FF2D55; --den:#5FA3F0; --det:#3E72E8; --mem:#8FA6D6;  /* team identity, lifted for the dark surface */
+  --font-display:"Anton","Impact","Arial Narrow",sans-serif;
+  --font-body:"Barlow","Helvetica Neue",Arial,sans-serif;
+  --font-cond:"Barlow Condensed","Arial Narrow",sans-serif;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#F4F1EB; --surface:#FFFFFF; --surface-2:#ECE7DF; --fg:#17141A; --fg-2:#3C373F; --muted:#6F6861;
+    --line:#DDD6CC; --line-2:#C9C1B5; --red:#D50032; --red-ink:#B8002B; --gold:#BB9754; --gold-ink:#8A6A2B;
+    --ball:#E06A1E; --ball-seam:#4A2410; --ball-hollow:#FFF8F1; --comp-bar:#C9C2B8;
+    --phi:#D50032; --den:#2E7FD0; --det:#003DA5; --mem:#5D76A9;
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#F4F1EB; --surface:#FFFFFF; --surface-2:#ECE7DF; --fg:#17141A; --fg-2:#3C373F; --muted:#6F6861;
+  --line:#DDD6CC; --line-2:#C9C1B5; --red:#D50032; --red-ink:#B8002B; --gold:#BB9754; --gold-ink:#8A6A2B;
+  --ball:#E06A1E; --ball-seam:#4A2410; --ball-hollow:#FFF8F1; --comp-bar:#C9C2B8;
+  --phi:#D50032; --den:#2E7FD0; --det:#003DA5; --mem:#5D76A9;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 40px;}
+.page{max-width:1360px;margin:0 auto;display:grid;gap:28px}
+h1,h2,h3{margin:0;text-wrap:balance}
+.eyebrow{font-family:var(--font-cond);font-weight:600;letter-spacing:.14em;text-transform:uppercase;font-size:12px;color:var(--muted)}
+.gold{color:var(--gold-ink)}
+a{color:var(--red-ink)}
+:focus-visible{outline:2px solid var(--gold-ink);outline-offset:2px}
+
+/* ---------- trading card ---------- */
+.card{display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:center;background:var(--surface);
+  border:1px solid var(--line);border-radius:14px;padding:22px 24px;position:relative;overflow:hidden;margin-top:24px}
+.card::before{content:"";position:absolute;inset:0 0 auto 0;height:6px;background:linear-gradient(90deg,var(--red) 0 40%,var(--gold) 40% 55%,var(--red) 55% 100%)}
+.card::after{content:"3";position:absolute;right:-10px;bottom:-62px;font-family:var(--font-display);font-size:280px;line-height:1;color:var(--fg);opacity:.045;pointer-events:none}
+.badge{width:132px;height:132px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#2A2528,#0B0A0C 70%);
+  border:4px solid var(--red);box-shadow:0 0 0 3px var(--gold),0 10px 30px rgba(0,0,0,.35);display:grid;place-items:center;position:relative;overflow:hidden;flex:none}
+.badge img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.badge .num{font-family:var(--font-display);font-size:78px;line-height:1;color:#F3EFE8;letter-spacing:-.02em;transform:translateY(2px)}
+.badge .num span{color:#BB9754}
+.card-id{display:grid;gap:10px;min-width:0}
+.card-id h1{font-family:var(--font-display);font-size:clamp(40px,6vw,64px);line-height:.95;letter-spacing:.01em;text-transform:uppercase}
+.card-id h1 small{display:block;font-family:var(--font-cond);font-weight:600;font-size:16px;letter-spacing:.3em;color:var(--gold-ink);margin-top:6px}
+.facts{display:flex;flex-wrap:wrap;gap:6px 22px;font-family:var(--font-cond);font-size:15px;color:var(--fg-2)}
+.facts b{color:var(--fg);font-weight:600}
+.honors{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.honor{font-family:var(--font-cond);font-weight:600;font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;padding:4px 9px;border-radius:999px;border:1px solid var(--line-2);color:var(--fg-2);background:var(--surface-2)}
+.honor.hot{border-color:var(--gold);color:var(--gold-ink)}
+
+/* ---------- stat tiles ---------- */
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media (max-width:760px){.tiles{grid-template-columns:repeat(2,1fr)}}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;gap:2px}
+.tile .v{font-family:var(--font-display);font-size:36px;line-height:1;font-variant-numeric:tabular-nums}
+.tile .l{font-family:var(--font-cond);font-weight:600;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-2)}
+.tile .r{font-size:12.5px;color:var(--muted)}
+.tile.po .v{color:var(--gold-ink)}
+
+/* ---------- sections ---------- */
+section{display:grid;gap:14px}
+.sec-head{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:10px 20px}
+.sec-head h2{font-family:var(--font-display);font-size:30px;letter-spacing:.02em;text-transform:uppercase;line-height:1}
+.sec-head p{margin:0;color:var(--fg-2);max-width:62ch}
+.controls{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
+.ctl{display:flex;align-items:center;gap:8px;font-family:var(--font-cond);font-size:14px;color:var(--fg-2);white-space:nowrap}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button{all:unset;cursor:pointer;padding:6px 11px;font-family:var(--font-cond);font-weight:600;font-size:13.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--fg-2)}
+.seg button[aria-pressed="true"]{background:var(--red);color:#fff}
+.seg button:hover:not([aria-pressed="true"]){background:var(--surface-2)}
+.seg button:focus-visible{outline-offset:-2px}
+.check{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.check input{accent-color:var(--red);width:15px;height:15px;margin:0}
+
+/* ---------- ball map ---------- */
+.map-wrap{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 8px 10px;overflow-x:auto;overflow-y:hidden;min-width:0}
+.map-wrap svg{display:block}
+.map-wrap text{font-family:var(--font-cond);fill:var(--fg-2)}
+.map-wrap .season-label{font-family:var(--font-display);font-size:15px;fill:var(--fg);letter-spacing:.02em}
+.map-wrap .month-label{font-size:12.5px;font-weight:600;letter-spacing:.1em;fill:var(--muted)}
+.map-wrap .grid-h{stroke:var(--line);stroke-width:1}
+.map-wrap .grid-v{stroke:var(--line);stroke-width:1;stroke-dasharray:2 4}
+.map-wrap .po-band{fill:var(--surface-2)}
+.map-wrap .honor-tag{font-size:10px;font-weight:700;letter-spacing:.06em;fill:var(--gold-ink)}
+.map-wrap .pts-tag{font-size:10.5px;font-weight:700;fill:var(--gold-ink);paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round}
+.map-wrap .seam{fill:none;stroke-linecap:round;vector-effect:non-scaling-stroke;stroke-width:.9}
+.ball{cursor:pointer;transition:opacity .25s}
+.ball.dim{opacity:.13}
+.ball.win .shell{fill:var(--ball)}
+.ball.win .seam{stroke:var(--ball-seam)}
+.ball.loss .shell{fill:var(--ball-hollow);stroke:var(--ball);stroke-width:1.1;vector-effect:non-scaling-stroke}
+.ball.loss .seam{stroke:var(--ball);opacity:.55}
+.ball .ring{fill:none;stroke:var(--surface);stroke-width:1.5;vector-effect:non-scaling-stroke}
+.ball:hover .shell,.ball.pinned .shell{stroke:var(--gold-ink);stroke-width:2;vector-effect:non-scaling-stroke}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;align-items:center;font-family:var(--font-cond);font-size:13.5px;color:var(--fg-2)}
+.legend svg{vertical-align:middle;margin-right:5px}
+.legend .k{display:inline-flex;align-items:center}
+.season-strip{display:flex;gap:6px;flex-wrap:wrap}
+.tag-team{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-cond);font-size:13px;color:var(--fg-2)}
+.tag-team i{width:14px;height:4px;border-radius:2px;display:inline-block}
+
+/* ---------- comparison bars ---------- */
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{all:unset;cursor:pointer;font-family:var(--font-cond);font-weight:600;font-size:13px;letter-spacing:.03em;padding:5px 10px;border-radius:999px;border:1px solid var(--line-2);color:var(--fg-2);background:var(--surface)}
+.chip[aria-pressed="true"]{background:var(--surface-2);border-color:var(--gold);color:var(--fg)}
+.chip.ai{border-color:var(--red);color:var(--red-ink);cursor:default}
+.chip:focus-visible{outline-offset:1px}
+.bars-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px}
+@media (max-width:420px){.bars-grid{grid-template-columns:1fr}}
+.bar-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px 8px;min-width:0}
+.bar-card header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}
+.bar-card h3{font-family:var(--font-cond);font-weight:700;font-size:16px;letter-spacing:.06em;text-transform:uppercase}
+.bar-card .rank{font-family:var(--font-cond);font-size:12.5px;color:var(--muted);white-space:nowrap}
+.bar-card .rank b{color:var(--gold-ink);font-weight:700}
+.bar-card .rank.lead b{color:var(--red-ink)}
+.bar-card svg{width:100%;display:block}
+.bar-card text{font-family:var(--font-cond);font-size:13px;fill:var(--fg-2);font-variant-numeric:tabular-nums}
+.bar-card text.name{fill:var(--fg-2)}
+.bar-card text.name.ai{fill:var(--fg);font-weight:700}
+.bar-card text.val{fill:var(--fg)}
+.bar-card text.na{fill:var(--muted);font-style:italic}
+.bar-card rect.bar{fill:var(--comp-bar)}
+.bar-card rect.bar.ai{fill:var(--red)}
+.bar-card .axis line{stroke:var(--line);stroke-width:1}
+
+/* ---------- trends ---------- */
+.trend-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.trend{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px 6px;min-width:0}
+.trend h3{font-family:var(--font-cond);font-weight:700;font-size:15px;letter-spacing:.06em;text-transform:uppercase;display:flex;justify-content:space-between;gap:8px}
+.trend h3 span{color:var(--muted);font-weight:500;letter-spacing:.02em;text-transform:none}
+.trend svg{width:100%;display:block}
+.trend text{font-family:var(--font-cond);font-size:11.5px;fill:var(--muted);font-variant-numeric:tabular-nums}
+.trend .grid line{stroke:var(--line);stroke-width:1}
+.trend .rs-line{fill:none;stroke:var(--red);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.trend .rs-area{fill:var(--red);opacity:.09}
+.trend .rs-dot{fill:var(--red);stroke:var(--surface);stroke-width:1.5}
+.trend .po-dot{fill:var(--surface);stroke:var(--gold-ink);stroke-width:1.8}
+.trend .mvp{fill:var(--gold-ink);font-size:10px;font-weight:700;letter-spacing:.08em}
+.trend .mvp-line{stroke:var(--gold);stroke-dasharray:2 3}
+
+/* ---------- 50-point games ---------- */
+.fifty{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+@media (max-width:1000px){.fifty{grid-template-columns:repeat(4,1fr)}}
+@media (max-width:560px){.fifty{grid-template-columns:repeat(2,1fr)}}
+.fg{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:1px;position:relative}
+.fg .p{font-family:var(--font-display);font-size:34px;line-height:1;color:var(--ball)}
+.fg.po .p{color:var(--gold-ink)}
+.fg .o{font-family:var(--font-cond);font-weight:600;font-size:14px}
+.fg .d{font-size:12px;color:var(--muted)}
+.fg .t{position:absolute;top:8px;right:10px;font-family:var(--font-cond);font-size:11px;letter-spacing:.08em;color:var(--muted)}
+.fg.po .t{color:var(--gold-ink)}
+
+/* ---------- ranks ---------- */
+.ranks{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+@media (max-width:1000px){.ranks{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:560px){.ranks{grid-template-columns:repeat(2,1fr)}}
+.rk{display:flex;align-items:baseline;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.rk .n{font-family:var(--font-display);font-size:28px;line-height:1;color:var(--gold-ink);min-width:48px}
+.rk .n.top{color:var(--red-ink)}
+.rk .c{display:grid;gap:1px}
+.rk .c b{font-family:var(--font-cond);font-size:14px;font-weight:600}
+.rk .c span{font-size:12px;color:var(--muted)}
+
+footer{color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:14px;display:grid;gap:6px}
+footer p{margin:0;max-width:90ch}
+
+/* ---------- tooltip ---------- */
+#tip{position:fixed;z-index:50;pointer-events:none;background:var(--surface);color:var(--fg);border:1px solid var(--line-2);
+  border-radius:10px;padding:10px 12px;box-shadow:0 12px 30px rgba(0,0,0,.35);font-size:13px;min-width:230px;max-width:290px}
+#tip .h{font-family:var(--font-cond);font-weight:700;font-size:15px;letter-spacing:.02em;display:flex;justify-content:space-between;gap:10px}
+#tip .h .w{color:var(--red-ink)}#tip .h .l{color:var(--muted)}
+#tip .s{color:var(--muted);font-size:12px;margin-bottom:6px}
+#tip .g{display:grid;grid-template-columns:repeat(4,1fr);gap:4px 8px;font-variant-numeric:tabular-nums}
+#tip .g div{display:grid;line-height:1.15}
+#tip .g b{font-family:var(--font-cond);font-weight:700;font-size:15px}
+#tip .g span{font-size:10.5px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+#tip .g .big b{color:var(--ball);font-size:18px}
+
+@media (max-width:640px){
+  .card{grid-template-columns:1fr;justify-items:start}
+  .badge{width:104px;height:104px}.badge .num{font-size:62px}
+  .card::after{display:none}
+  .sec-head h2{font-size:26px}
+  .tile .v{font-size:30px}
+  .seg button{padding:6px 8px;font-size:12.5px}
+}
+@media (prefers-reduced-motion: reduce){ .ball{transition:none} }
+</style>
+
+<div class="page">
+
+<!-- ================= TRADING CARD ================= -->
+<header class="card" aria-label="Allen Iverson player card">
+  <div class="badge" title="Drop a photo.jpg next to index.html to replace this badge">
+    <img src="photo.jpg" alt="" onerror="this.remove()"><div class="num">A<span>I</span></div>
+  </div>
+  <div class="card-id">
+    <div class="eyebrow">Philadelphia 76ers · Guard · No. 3 · 1996–2010</div>
+    <h1>Allen Iverson <small>“The Answer”</small></h1>
+    <div class="facts">
+      <span><b>6'0"</b> · 165 lb</span>
+      <span>Born <b>June 7, 1975</b>, Hampton, VA</span>
+      <span><b>Georgetown</b></span>
+      <span>Drafted <b>No. 1 overall, 1996</b> (PHI)</span>
+      <span><b>14</b> seasons · <b>914</b> games</span>
+    </div>
+    <div class="honors" aria-label="Honors">
+      <span class="honor hot">2001 MVP</span>
+      <span class="honor hot">Hall of Fame 2016</span>
+      <span class="honor">1997 Rookie of the Year</span>
+      <span class="honor">4× scoring champ</span>
+      <span class="honor">3× steals leader</span>
+      <span class="honor">11× All-Star</span>
+      <span class="honor">2× All-Star MVP</span>
+      <span class="honor">7× All-NBA</span>
+    </div>
+  </div>
+</header>
+
+<!-- ================= HEADLINE TILES ================= -->
+<section aria-label="Career headline numbers">
+  <div class="tiles" id="tiles"></div>
+</section>
+
+<!-- ================= BALL MAP ================= -->
+<section aria-label="Every game of his career">
+  <div class="sec-head">
+    <div>
+      <div class="eyebrow">985 games · 914 regular season + 71 playoff</div>
+      <h2>Every game, one basketball</h2>
+      <p>Seasons run left to right, months top to bottom. Inside each month the balls climb with the calendar, so a hot stretch reads as a staircase. Filled balls are wins, hollow balls are losses, and the size is his scoring that night. Hover any ball for the full box score.</p>
+    </div>
+    <div class="controls">
+      <div class="ctl">Size by
+        <div class="seg" id="sizeSeg" role="group" aria-label="Size balls by">
+          <button aria-pressed="true" data-v="pts">Points</button>
+          <button aria-pressed="false" data-v="min">Minutes</button>
+          <button aria-pressed="false" data-v="ast">Assists</button>
+          <button aria-pressed="false" data-v="stl">Steals</button>
+        </div>
+      </div>
+      <div class="ctl">Show
+        <div class="seg" id="showSeg" role="group" aria-label="Show wins or losses">
+          <button aria-pressed="true" data-v="all">All</button>
+          <button aria-pressed="false" data-v="W">Wins</button>
+          <button aria-pressed="false" data-v="L">Losses</button>
+        </div>
+      </div>
+      <label class="check ctl"><input type="checkbox" id="hi40"> Spotlight 40-point games</label>
+    </div>
+  </div>
+  <div class="map-wrap" id="mapWrap"></div>
+  <div class="legend" id="legend"></div>
+</section>
+
+<!-- ================= COMPARISON BARS ================= -->
+<section aria-label="Comparison with other greats">
+  <div class="sec-head">
+    <div>
+      <div class="eyebrow">Career per-game averages</div>
+      <h2>Iverson against the field</h2>
+      <p>Pick the comparison set. Each chart sorts the field and shows where Iverson lands. Regular season and playoffs are separate careers for him: the playoff numbers go up.</p>
+    </div>
+    <div class="controls">
+      <div class="seg" id="typeSeg" role="group" aria-label="Regular season or playoffs">
+        <button aria-pressed="true" data-v="RS">Regular season</button>
+        <button aria-pressed="false" data-v="PO">Playoffs</button>
+      </div>
+    </div>
+  </div>
+  <div class="chips" id="chips" aria-label="Comparison players"></div>
+  <div class="bars-grid" id="bars"></div>
+</section>
+
+<!-- ================= SEASON TRENDS ================= -->
+<section aria-label="Season by season">
+  <div class="sec-head">
+    <div>
+      <div class="eyebrow">Season by season · regular season line, playoff dots</div>
+      <h2>The arc</h2>
+    </div>
+    <div class="legend">
+      <span class="k"><svg width="22" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="var(--red)" stroke-width="2"/></svg>Regular season</span>
+      <span class="k"><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="var(--surface)" stroke="var(--gold-ink)" stroke-width="1.8"/></svg>Playoffs</span>
+    </div>
+  </div>
+  <div class="trend-grid" id="trends"></div>
+</section>
+
+<!-- ================= 50-POINT GAMES ================= -->
+<section aria-label="50-point games">
+  <div class="sec-head">
+    <div>
+      <div class="eyebrow">14 times · 11 regular season, 3 playoffs</div>
+      <h2>Fifty-point nights</h2>
+    </div>
+  </div>
+  <div class="fifty" id="fifty"></div>
+</section>
+
+<!-- ================= ALL-TIME RANKS ================= -->
+<section aria-label="All-time ranks">
+  <div class="sec-head">
+    <div>
+      <div class="eyebrow">Where he sits all-time</div>
+      <h2>The leaderboards</h2>
+    </div>
+  </div>
+  <div class="ranks" id="ranks"></div>
+</section>
+
+<footer>
+  <p><b>Sources.</b> Game-by-game box scores, career averages and all-time rankings from landofbasketball.com (fetched October 14, 2026); team colors from the 1997–2009 76ers, 2003–17 Nuggets, 2005–17 Pistons and Grizzlies identities. Built with d3.js. Totals reconcile to the official career line: 24,368 points, 5,624 assists, 1,983 steals in 914 regular-season games.</p>
+</footer>
+
+</div>
+
+<div id="tip" hidden role="status"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="data.js"></script>
+<script>
+(function(){
+const D = window.AI_DATA;
+const K = D.keys;
+const G = D.games.map(r => { const o = {}; K.forEach((k,i)=>o[k]=r[i]); o.d = new Date(o.date+'T12:00:00'); o.month=o.d.getMonth(); o.day=o.d.getDate(); return o; });
+const RS = G.filter(g=>g.type==='RS'), PO = G.filter(g=>g.type==='PO');
+const SEASONS = D.seasons;
+const TEAM = {PHI:{name:'76ers',css:'var(--phi)'},DEN:{name:'Nuggets',css:'var(--den)'},DET:{name:'Pistons',css:'var(--det)'},MEM:{name:'Grizzlies',css:'var(--mem)'}};
+const HONORS = {1997:['ROY'],1999:['SC'],2001:['MVP','SC','ST'],2002:['SC','ST'],2003:['ST'],2005:['SC']};
+const ASG = new Set([2000,2001,2002,2003,2004,2005,2006,2007,2008,2009,2010]);
+const fmt1 = d3.format('.1f'), fmtC = d3.format(','), fmtD = d3.timeFormat('%b %d, %Y');
+const mean = (a,k)=>d3.mean(a,g=>g[k]);
+const ord = n => { const s=['th','st','nd','rd'], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); };
+
+/* ---------------- tiles ---------------- */
+(function tiles(){
+  const rs = D.comps['Allen Iverson'].RS, po = D.comps['Allen Iverson'].PO;
+  const rk = D.ranks;
+  const t = [
+    {v:fmt1(mean(RS,'pts')), l:'Points per game', r:`${ord(+rk.RS['Per Game - points per game'].rank)} all-time`},
+    {v:fmt1(mean(PO,'pts')), l:'Playoff PPG', r:`${ord(+rk.PO['Per Game - points per game'].rank)} all-time`, po:true},
+    {v:fmt1(mean(RS,'min')), l:'Minutes per game', r:`playoffs: ${fmt1(mean(PO,'min'))}`},
+    {v:fmt1(mean(RS,'ast')), l:'Assists per game', r:`${fmtC(d3.sum(RS,g=>g.ast))} career`},
+    {v:fmt1(mean(RS,'stl')), l:'Steals per game', r:`${ord(+rk.RS['Per Game - steals per game'].rank)} all-time`},
+    {v:fmtC(d3.sum(RS,g=>g.pts)), l:'Career points', r:`${ord(+rk.RS['Career Totals - points'].rank)} all-time`},
+    {v:RS.filter(g=>g.pts>=40).length+PO.filter(g=>g.pts>=40).length, l:'40-point games', r:`${RS.filter(g=>g.pts>=40).length} RS · ${PO.filter(g=>g.pts>=40).length} PO`},
+    {v:d3.max(G,g=>g.pts), l:'Career high', r:'vs. Magic, Feb 12, 2005'},
+  ];
+  d3.select('#tiles').selectAll('div').data(t).join('div').attr('class',d=>'tile'+(d.po?' po':''))
+    .html(d=>`<div class="v">${d.v}</div><div class="l">${d.l}</div><div class="r">${d.r}</div>`);
+})();
+
+/* ---------------- tooltip ---------------- */
+const tip = d3.select('#tip');
+function tipHTML(g){
+  const vs = g.home ? 'vs.' : '@';
+  const fg = `${g.fgm}-${g.fga}`, tp = `${g.tpm}-${g.tpa}`, ft = `${g.ftm}-${g.fta}`;
+  const ot = g.ot ? (g.ot>1? ` (${g.ot}OT)` : ' (OT)') : '';
+  const type = g.type==='PO' ? 'Playoffs' : 'Regular season';
+  return `<div class="h"><span>${TEAM[g.team].name} ${vs} ${g.opp}</span><span class="${g.result==='W'?'w':'l'}">${g.result} ${g.teamScore}–${g.oppScore}${ot}</span></div>
+  <div class="s">${fmtD(g.d)} · ${type} · game ${g.gameNo}</div>
+  <div class="g">
+    <div class="big"><b>${g.pts}</b><span>pts</span></div><div><b>${g.min}</b><span>min</span></div><div><b>${g.ast}</b><span>ast</span></div><div><b>${g.stl}</b><span>stl</span></div>
+    <div><b>${fg}</b><span>fg</span></div><div><b>${tp}</b><span>3pt</span></div><div><b>${ft}</b><span>ft</span></div><div><b>${g.reb}</b><span>reb</span></div>
+    <div><b>${g.blk}</b><span>blk</span></div><div><b>${g.tov}</b><span>tov</span></div><div><b>${g.pf}</b><span>pf</span></div><div><b>${g.oreb}/${g.dreb}</b><span>o/d reb</span></div>
+  </div>`;
+}
+function showTip(html, ev){
+  tip.html(html).property('hidden',false);
+  moveTip(ev);
+}
+function moveTip(ev){
+  const n = tip.node(), w = n.offsetWidth, h = n.offsetHeight;
+  let x = ev.clientX + 14, y = ev.clientY + 14;
+  if (x + w > window.innerWidth - 8) x = ev.clientX - w - 14;
+  if (y + h > window.innerHeight - 8) y = ev.clientY - h - 14;
+  tip.style('left', Math.max(4,x)+'px').style('top', Math.max(4,y)+'px');
+}
+function hideTip(){ tip.property('hidden',true); }
+
+/* ---------------- ball map ---------------- */
+const MONTHS = [9,10,11,0,1,2,3,4]; // Oct..May (the 1999 lockout season played into May)
+const MONTH_NAMES = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+const SIZE_DOMAIN = {pts:[0,60], min:[0,57], ast:[0,16], stl:[0,10]};
+const state = {sizeBy:'pts', show:'all', hi40:false};
+let pinned = null;
+
+function renderMap(){
+  const wrap = d3.select('#mapWrap');
+  wrap.selectAll('*').remove();
+  const LEFT = 50, TOP = 64, RIGHT = 8, BOTTOM = 14;
+  const avail = wrap.node().clientWidth - 16;
+  const colW = Math.max(84, Math.floor((avail - LEFT - RIGHT) / SEASONS.length));
+  const rowH = 50, poH = 124, pad = 7;
+  const W = LEFT + colW*SEASONS.length + RIGHT;
+  const H = TOP + rowH*MONTHS.length + poH + BOTTOM;
+  const svg = wrap.append('svg').attr('width',W).attr('height',H).attr('viewBox',`0 0 ${W} ${H}`).attr('role','img')
+    .attr('aria-label','Every game of Allen Iverson\'s career as a basketball sized by points, by season and month');
+  const SEAMS = 'M0,-1 V1 M-1,0 H1 M-0.72,-0.70 C-0.22,-0.30 -0.22,0.30 -0.72,0.70 M0.72,-0.70 C0.22,-0.30 0.22,0.30 0.72,0.70';
+
+  const x0 = i => LEFT + i*colW;
+  const rowY = m => TOP + MONTHS.indexOf(m)*rowH;
+  const poY = TOP + rowH*MONTHS.length;
+
+  // playoff band + grid
+  svg.append('rect').attr('class','po-band').attr('x',LEFT).attr('y',poY).attr('width',colW*SEASONS.length).attr('height',poH).attr('rx',6);
+  svg.append('g').selectAll('line').data(MONTHS.map((m,i)=>i)).join('line').attr('class','grid-h')
+    .attr('x1',LEFT).attr('x2',W-RIGHT).attr('y1',i=>TOP+i*rowH).attr('y2',i=>TOP+i*rowH);
+  svg.append('g').selectAll('line').data(d3.range(SEASONS.length+1)).join('line').attr('class','grid-v')
+    .attr('x1',i=>x0(i)).attr('x2',i=>x0(i)).attr('y1',TOP).attr('y2',poY+poH);
+
+  // month labels
+  svg.append('g').selectAll('text').data(MONTHS).join('text').attr('class','month-label')
+    .attr('x',LEFT-10).attr('y',m=>rowY(m)+rowH/2+4).attr('text-anchor','end').text(m=>MONTH_NAMES[m]);
+  svg.append('text').attr('class','month-label').attr('transform',`translate(${LEFT-14},${poY+poH/2}) rotate(-90)`).attr('text-anchor','middle').text('PLAYOFFS');
+
+  // season headers
+  const hdr = svg.append('g');
+  SEASONS.forEach((s,i)=>{
+    const gs = G.filter(g=>g.seasonEnd===s.end);
+    const rs = gs.filter(g=>g.type==='RS');
+    const teams = []; rs.forEach(g=>{ const t=teams.find(t=>t.team===g.team); t? t.n++ : teams.push({team:g.team,n:1}); });
+    const g = hdr.append('g').attr('transform',`translate(${x0(i)},0)`).style('cursor','default');
+    g.append('text').attr('class','season-label').attr('x',colW/2).attr('y',22).attr('text-anchor','middle').text(s.label.replace('-','–'));
+    // team bar, split by games with each team
+    let cx = 8; const bw = colW-16;
+    teams.forEach(t=>{ const w = bw*t.n/rs.length; g.append('rect').attr('x',cx).attr('y',28).attr('width',Math.max(2,w-1)).attr('height',4).attr('rx',2).style('fill',TEAM[t.team].css); cx += w; });
+    // honors
+    const tags = (HONORS[s.end]||[]).slice(); if (ASG.has(s.end)) tags.push('★');
+    g.append('text').attr('class','honor-tag').attr('x',colW/2).attr('y',48).attr('text-anchor','middle').text(tags.join(' '));
+    // season summary tooltip
+    const po = gs.filter(g=>g.type==='PO');
+    const line = `<div class="h"><span>${s.label.replace('-','–')} · ${teams.map(t=>TEAM[t.team].name+(teams.length>1?' ('+t.n+')':'')).join(' → ')}</span></div>
+      <div class="s">${rs.length} games · ${rs.filter(g=>g.result==='W').length}–${rs.filter(g=>g.result==='L').length} in games he played${po.length?` · ${po.length} playoff games`:''}</div>
+      <div class="g"><div class="big"><b>${fmt1(mean(rs,'pts'))}</b><span>ppg</span></div><div><b>${fmt1(mean(rs,'min'))}</b><span>mpg</span></div><div><b>${fmt1(mean(rs,'ast'))}</b><span>apg</span></div><div><b>${fmt1(mean(rs,'stl'))}</b><span>spg</span></div>
+      ${po.length?`<div><b>${fmt1(mean(po,'pts'))}</b><span>po ppg</span></div><div><b>${fmt1(mean(po,'min'))}</b><span>po mpg</span></div><div><b>${fmt1(mean(po,'ast'))}</b><span>po apg</span></div><div><b>${po.filter(g=>g.result==='W').length}–${po.filter(g=>g.result==='L').length}</b><span>po w–l</span></div>`:''}</div>`;
+    g.append('rect').attr('x',0).attr('y',0).attr('width',colW).attr('height',TOP-4).attr('fill','transparent')
+      .on('mouseenter',ev=>showTip(line,ev)).on('mousemove',moveTip).on('mouseleave',hideTip);
+  });
+
+  // place balls
+  const r = d3.scaleSqrt().domain(SIZE_DOMAIN[state.sizeBy]).range([1.4,8.6]).clamp(true);
+  const placed = [];
+  SEASONS.forEach((s,i)=>{
+    const gs = G.filter(g=>g.seasonEnd===s.end);
+    MONTHS.forEach(m=>{
+      const cell = gs.filter(g=>g.type==='RS' && g.month===m).sort((a,b)=>a.d-b.d);
+      const n = cell.length; if(!n) return;
+      cell.forEach((g,j)=>{
+        const x = x0(i) + pad + (g.day-1)/30 * (colW-2*pad);
+        const y = rowY(m) + rowH - pad - (n>1 ? j/(n-1) : 0.5) * (rowH-2*pad);
+        placed.push({g,x,y});
+      });
+    });
+    const po = gs.filter(g=>g.type==='PO').sort((a,b)=>a.d-b.d);
+    po.forEach((g,j)=>{
+      const n = po.length;
+      const x = x0(i) + pad + (n>1 ? j/(n-1) : 0.5) * (colW-2*pad);
+      const y = poY + poH - pad - (n>1 ? j/(n-1) : 0.5) * (poH-2*pad);
+      placed.push({g,x,y});
+    });
+  });
+  // draw order: earlier games first so later games sit on top of the stair
+  const balls = svg.append('g').selectAll('g.ball').data(placed).join('g')
+    .attr('class',d=>'ball '+(d.g.result==='W'?'win':'loss'))
+    .attr('transform',d=>`translate(${d.x.toFixed(1)},${d.y.toFixed(1)}) scale(${r(d.g[state.sizeBy]).toFixed(2)})`)
+    .attr('tabindex',0).attr('role','img').attr('aria-label',d=>`${fmtD(d.g.d)} ${d.g.result} ${d.g.pts} points`)
+    .on('mouseenter',(ev,d)=>showTip(tipHTML(d.g),ev)).on('mousemove',moveTip).on('mouseleave',()=>{ if(!pinned) hideTip(); })
+    .on('focus',(ev,d)=>{ const b=ev.target.getBoundingClientRect(); showTip(tipHTML(d.g),{clientX:b.left+b.width/2,clientY:b.top+b.height}); })
+    .on('blur',hideTip)
+    .on('click',(ev,d)=>{ pinned = (pinned===d.g)?null:d.g; balls.classed('pinned',p=>p.g===pinned); if(pinned) showTip(tipHTML(d.g),ev); else hideTip(); ev.stopPropagation(); });
+  balls.append('circle').attr('class','ring').attr('r',1);
+  balls.append('circle').attr('class','shell').attr('r',1);
+  balls.append('path').attr('class','seam').attr('d',SEAMS);
+  d3.select('body').on('click.unpin',()=>{ pinned=null; balls.classed('pinned',false); hideTip(); });
+
+  // 50-point labels
+  svg.append('g').selectAll('text').data(placed.filter(p=>p.g.pts>=50)).join('text').attr('class','pts-tag')
+    .attr('x',d=>d.x).attr('y',d=>d.y - r(d.g[state.sizeBy]) - 3).attr('text-anchor','middle').text(d=>d.g.pts);
+
+  applyFilters();
+  // legend
+  const sz = v => r(v);
+  const legend = d3.select('#legend').html('');
+  const key = (svgHTML, label) => legend.append('span').attr('class','k').html(svgHTML + label);
+  key(`<svg width="18" height="18"><circle cx="9" cy="9" r="7" fill="var(--ball)"/><path d="M9,2 V16 M2,9 H16" stroke="var(--ball-seam)" fill="none"/></svg>`,'Win');
+  key(`<svg width="18" height="18"><circle cx="9" cy="9" r="7" fill="var(--ball-hollow)" stroke="var(--ball)"/><path d="M9,2 V16 M2,9 H16" stroke="var(--ball)" opacity=".55" fill="none"/></svg>`,'Loss');
+  const sizes = {pts:[10,30,50],min:[20,40,55],ast:[3,8,14],stl:[2,5,9]}[state.sizeBy];
+  const lab = {pts:'pts',min:'min',ast:'ast',stl:'stl'}[state.sizeBy];
+  key(`<svg width="64" height="20">${sizes.map((v,i)=>`<circle cx="${10+i*22}" cy="10" r="${sz(v).toFixed(1)}" fill="var(--ball)"/>`).join('')}</svg>`, `${sizes.join(' / ')} ${lab}`);
+  legend.append('span').attr('class','k').html(`<span style="color:var(--gold-ink);font-weight:700;font-size:11.5px;letter-spacing:.06em">MVP · SC · ST · ROY · ★</span>&nbsp; season honors: MVP, scoring title, steals title, Rookie of the Year, All-Star`);
+  const strip = legend.append('span').attr('class','season-strip');
+  Object.entries(TEAM).forEach(([k,t])=>strip.append('span').attr('class','tag-team').html(`<i style="background:${t.css}"></i>${t.name}`));
+}
+function applyFilters(){
+  d3.selectAll('#mapWrap .ball').classed('dim', d => (state.show!=='all' && d.g.result!==state.show) || (state.hi40 && d.g.pts<40));
+}
+function seg(id, cb){
+  d3.select(id).selectAll('button').on('click',function(){
+    d3.select(id).selectAll('button').attr('aria-pressed','false'); d3.select(this).attr('aria-pressed','true'); cb(this.dataset.v);
+  });
+}
+seg('#sizeSeg', v=>{ state.sizeBy=v; renderMap(); });
+seg('#showSeg', v=>{ state.show=v; applyFilters(); });
+d3.select('#hi40').on('change',function(){ state.hi40=this.checked; applyFilters(); });
+
+/* ---------------- comparison bars ---------------- */
+const CATS = [
+  {k:'ppg',l:'Points per game',f:fmt1},
+  {k:'mpg',l:'Minutes per game',f:fmt1},
+  {k:'apg',l:'Assists per game',f:fmt1},
+  {k:'spg',l:'Steals per game',f:fmt1},
+  {k:'rpg',l:'Rebounds per game',f:fmt1},
+  {k:'games',l:'Games played',f:fmtC},
+];
+const ALL_PLAYERS = Object.keys(D.comps).filter(p=>p!=='Allen Iverson');
+const DEFAULT_ON = new Set(['Michael Jordan','Kobe Bryant','LeBron James','Dwyane Wade','Jerry West','Oscar Robertson','Wilt Chamberlain']);
+const cmp = {type:'RS', on:new Set(DEFAULT_ON)};
+const SHORT = p => { const parts=p.split(' '); return parts.length>1 ? parts[0][0]+'. '+parts.slice(1).join(' ') : p; };
+
+d3.select('#chips').selectAll('button').data(['Allen Iverson',...ALL_PLAYERS]).join('button')
+  .attr('class',p=>'chip'+(p==='Allen Iverson'?' ai':'')).attr('id',(p,i)=>'chip'+i)
+  .attr('aria-pressed',p=>p==='Allen Iverson'||cmp.on.has(p)?'true':'false').text(p=>p)
+  .on('click',(ev,p)=>{ if(p==='Allen Iverson') return; cmp.on.has(p)?cmp.on.delete(p):cmp.on.add(p); d3.select(ev.currentTarget).attr('aria-pressed',cmp.on.has(p)?'true':'false'); renderBars(); });
+seg('#typeSeg', v=>{ cmp.type=v; renderBars(); });
+
+function renderBars(){
+  const players = ['Allen Iverson',...ALL_PLAYERS.filter(p=>cmp.on.has(p))];
+  const cards = d3.select('#bars').selectAll('div.bar-card').data(CATS, d=>d.k).join('div').attr('class','bar-card');
+  cards.each(function(cat){
+    const rows = players.map(p=>({p, v:D.comps[p][cmp.type][cat.k]})).sort((a,b)=>(b.v??-1)-(a.v??-1));
+    const aiRank = rows.findIndex(r=>r.p==='Allen Iverson')+1;
+    const counted = rows.filter(r=>r.v!=null).length;
+    const card = d3.select(this); card.html('');
+    const hd = card.append('header');
+    hd.append('h3').text(cat.l);
+    hd.append('div').attr('class','rank'+(aiRank===1?' lead':'')).html(`Iverson <b>${aiRank===1?'leads':ord(aiRank)}</b> of ${counted}`);
+    const rowH = 22, labelW = 112, valW = 46, W = Math.max(280, this.clientWidth-28), H = rows.length*rowH + 6;
+    const x = d3.scaleLinear().domain([0, d3.max(rows,r=>r.v)||1]).range([0, W-labelW-valW]);
+    const svg = card.append('svg').attr('viewBox',`0 0 ${W} ${H}`).attr('height',H).attr('role','img').attr('aria-label',cat.l+' comparison');
+    const g = svg.selectAll('g').data(rows).join('g').attr('transform',(d,i)=>`translate(0,${i*rowH})`);
+    g.append('text').attr('class',d=>'name'+(d.p==='Allen Iverson'?' ai':'')).attr('x',labelW-8).attr('y',rowH/2+4).attr('text-anchor','end').text(d=>SHORT(d.p));
+    g.filter(d=>d.v!=null).append('rect').attr('class',d=>'bar'+(d.p==='Allen Iverson'?' ai':''))
+      .attr('x',labelW).attr('y',5).attr('height',rowH-10).attr('rx',3).attr('width',d=>Math.max(2,x(d.v)));
+    g.filter(d=>d.v!=null).append('text').attr('class','val').attr('x',d=>labelW+x(d.v)+6).attr('y',rowH/2+4).text(d=>cat.f(d.v));
+    g.filter(d=>d.v==null).append('text').attr('class','na').attr('x',labelW).attr('y',rowH/2+4).text('not recorded in his era');
+    svg.append('line').attr('class','axis').attr('x1',labelW).attr('x2',labelW).attr('y1',2).attr('y2',H-2).attr('stroke','var(--line-2)');
+    g.append('rect').attr('x',0).attr('y',0).attr('width',W).attr('height',rowH).attr('fill','transparent')
+      .on('mouseenter',(ev,d)=>{ const c=D.comps[d.p][cmp.type]; showTip(`<div class="h"><span>${d.p}</span><span class="l">${D.comps[d.p].height}</span></div><div class="s">${cmp.type==='RS'?'Regular season':'Playoffs'} career · ${fmtC(c.games)} games</div>
+        <div class="g"><div class="big"><b>${fmt1(c.ppg)}</b><span>ppg</span></div><div><b>${fmt1(c.mpg)}</b><span>mpg</span></div><div><b>${fmt1(c.apg)}</b><span>apg</span></div><div><b>${c.spg==null?'—':fmt1(c.spg)}</b><span>spg</span></div>
+        <div><b>${fmt1(c.rpg)}</b><span>rpg</span></div><div><b>${(c.fgp*100).toFixed(1)}</b><span>fg%</span></div><div><b>${c.tpp==null?'—':(c.tpp*100).toFixed(1)}</b><span>3p%</span></div><div><b>${(c.ftp*100).toFixed(1)}</b><span>ft%</span></div></div>`,ev); })
+      .on('mousemove',moveTip).on('mouseleave',hideTip);
+  });
+}
+
+/* ---------------- trends ---------------- */
+(function trends(){
+  const T = [{k:'pts',l:'Points per game'},{k:'min',l:'Minutes per game'},{k:'ast',l:'Assists per game'},{k:'stl',l:'Steals per game'}];
+  const bySeason = SEASONS.map(s=>{ const rs=RS.filter(g=>g.seasonEnd===s.end), po=PO.filter(g=>g.seasonEnd===s.end);
+    return {end:s.end,label:s.label, rs:Object.fromEntries(T.map(t=>[t.k,mean(rs,t.k)])), po:po.length?Object.fromEntries(T.map(t=>[t.k,mean(po,t.k)])):null, gRS:rs.length, gPO:po.length}; });
+  const box = d3.select('#trends');
+  T.forEach(t=>{
+    const card = box.append('div').attr('class','trend');
+    const peak = d3.max(bySeason, s=>s.rs[t.k]); const peakS = bySeason.find(s=>s.rs[t.k]===peak);
+    card.append('h3').html(`${t.l}<span>peak ${fmt1(peak)} in ${peakS.label.replace('-','–')}</span>`);
+    const W=320,H=130,m={t:14,r:12,b:22,l:30};
+    const x = d3.scalePoint().domain(SEASONS.map(s=>s.end)).range([m.l,W-m.r]);
+    const allV = bySeason.flatMap(s=>[s.rs[t.k], s.po?s.po[t.k]:null]).filter(v=>v!=null);
+    const y = d3.scaleLinear().domain([0, d3.max(allV)*1.08]).nice().range([H-m.b,m.t]);
+    const svg = card.append('svg').attr('viewBox',`0 0 ${W} ${H}`).attr('role','img').attr('aria-label',t.l+' by season');
+    const ticks = y.ticks(3);
+    const gr = svg.append('g').attr('class','grid');
+    gr.selectAll('line').data(ticks).join('line').attr('x1',m.l).attr('x2',W-m.r).attr('y1',d=>y(d)).attr('y2',d=>y(d));
+    svg.append('g').selectAll('text').data(ticks).join('text').attr('x',m.l-5).attr('y',d=>y(d)+4).attr('text-anchor','end').text(d=>d);
+    svg.append('g').selectAll('text').data([1997,2001,2005,2010]).join('text').attr('x',d=>x(d)).attr('y',H-6).attr('text-anchor','middle').text(d=>"'"+String(d).slice(2));
+    // MVP marker
+    svg.append('line').attr('class','mvp-line').attr('x1',x(2001)).attr('x2',x(2001)).attr('y1',m.t-4).attr('y2',H-m.b);
+    svg.append('text').attr('class','mvp').attr('x',x(2001)+4).attr('y',m.t+2).text('MVP');
+    svg.append('path').attr('class','rs-area').attr('d', d3.area().x(s=>x(s.end)).y0(y(0)).y1(s=>y(s.rs[t.k])).curve(d3.curveMonotoneX)(bySeason));
+    svg.append('path').attr('class','rs-line').attr('d', d3.line().x(s=>x(s.end)).y(s=>y(s.rs[t.k])).curve(d3.curveMonotoneX)(bySeason));
+    svg.append('g').selectAll('circle').data(bySeason).join('circle').attr('class','rs-dot').attr('r',s=>s.end===peakS.end?4.5:3).attr('cx',s=>x(s.end)).attr('cy',s=>y(s.rs[t.k]));
+    svg.append('g').selectAll('circle').data(bySeason.filter(s=>s.po)).join('circle').attr('class','po-dot').attr('r',3.5).attr('cx',s=>x(s.end)).attr('cy',s=>y(s.po[t.k]));
+    // hover columns
+    svg.append('g').selectAll('rect').data(bySeason).join('rect').attr('x',s=>x(s.end)-x.step()/2).attr('y',m.t-4).attr('width',x.step()).attr('height',H-m.b-m.t+4).attr('fill','transparent')
+      .on('mouseenter',(ev,s)=>showTip(`<div class="h"><span>${s.label.replace('-','–')}</span><span class="l">${s.gRS} G${s.gPO?' · '+s.gPO+' PO':''}</span></div><div class="g">
+        ${T.map(q=>`<div${q.k===t.k?' class="big"':''}><b>${fmt1(s.rs[q.k])}</b><span>${q.k==='pts'?'ppg':q.k==='min'?'mpg':q.k==='ast'?'apg':'spg'}</span></div>`).join('')}
+        ${s.po?T.map(q=>`<div><b>${fmt1(s.po[q.k])}</b><span>po ${q.k==='pts'?'ppg':q.k==='min'?'mpg':q.k==='ast'?'apg':'spg'}</span></div>`).join(''):''}</div>`,ev))
+      .on('mousemove',moveTip).on('mouseleave',hideTip);
+  });
+})();
+
+/* ---------------- 50-point games ---------------- */
+(function fifty(){
+  const f = G.filter(g=>g.pts>=50).sort((a,b)=>a.d-b.d);
+  d3.select('#fifty').selectAll('div').data(f).join('div').attr('class',g=>'fg'+(g.type==='PO'?' po':''))
+    .html(g=>`<div class="t">${g.type==='PO'?'PLAYOFFS':'RS'}</div><div class="p">${g.pts}</div><div class="o">${g.home?'vs.':'@'} ${g.opp}</div><div class="d">${fmtD(g.d)} · ${g.result} ${g.teamScore}–${g.oppScore}${g.ot?' OT':''}</div>`)
+    .on('mouseenter',(ev,g)=>showTip(tipHTML(g),ev)).on('mousemove',moveTip).on('mouseleave',hideTip);
+})();
+
+/* ---------------- all-time ranks ---------------- */
+(function ranks(){
+  const pick = [
+    ['RS','Per Game - points per game','Points per game','regular season'],
+    ['PO','Per Game - points per game','Points per game','playoffs'],
+    ['RS','Per Game - steals per game','Steals per game','regular season'],
+    ['RS','Per Game - field goals attempted per game','Field goal attempts per game','regular season'],
+    ['PO','Per Game - field goals attempted per game','Field goal attempts per game','playoffs'],
+    ['RS','Per Game - free throws attempted per game','Free throw attempts per game','regular season'],
+    ['RS','Rankings by Points Scored: 40+ point games','40-point games','regular season'],
+    ['PO','Rankings by Points Scored: 50+ point games','50-point games','playoffs'],
+    ['RS','Career Totals - steals','Career steals','regular season'],
+    ['RS','Career Totals - free throws made','Career free throws made','regular season'],
+    ['RS','Career Totals - points','Career points','regular season'],
+    ['PO','Per Game - steals per game','Steals per game','playoffs'],
+  ];
+  const rows = pick.map(([t,c,l,s])=>{ const r=D.ranks[t][c]; return {rank:+r.rank, value:r.value, l, s}; });
+  d3.select('#ranks').selectAll('div').data(rows).join('div').attr('class','rk')
+    .html(d=>`<div class="n${d.rank<=3?' top':''}">${ord(d.rank)}</div><div class="c"><b>${d.l}</b><span>${fmtC(+d.value)} · ${d.s}</span></div>`);
+})();
+
+/* ---------------- boot ---------------- */
+renderMap(); renderBars();
+let rt; window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(()=>{ renderMap(); renderBars(); },150); });
+})();
+</script>
+
+</body>
+</html>
